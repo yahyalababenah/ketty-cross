@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Ketty Cross — WebGL/Three.js (ESM)</title>
+  <style>
+    :root{
+      --ui:#0f172a; --accent:#ff4d6d; --shadow:rgba(15,23,42,.18);
+      --sky:#bde7ff; --grass:#c5f68f; --road:#d4d4d4; --rail:#b3a48f; --river:#9ed3ff; --finish:#ffd166;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--sky);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ui)}
+    .wrap{display:grid;grid-template-rows:auto 1fr auto;place-items:center;min-height:100%}
+    header{display:flex;gap:.75rem;align-items:center;justify-content:space-between;width:min(94vw,480px);padding:12px;margin-top:6px;background:#fff;border-radius:18px;box-shadow:0 6px 20px var(--shadow)}
+    header .brand{display:flex;gap:.5rem;align-items:center}
+    header h1{font-size:1.05rem;margin:0}
+    header .pill{display:inline-flex;gap:.35rem;align-items:center;background:#f3f4f6;border-radius:999px;padding:.35rem .6rem;font-size:.9rem}
+    header select{border:0;background:transparent;font-weight:600}
+    #game{position:relative;width:min(94vw,480px);aspect-ratio:9/14;background:#000;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px var(--shadow)}
+    #game canvas{width:100%;height:100%;display:block}
+    .overlay{position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,rgba(255,255,255,.86),rgba(255,255,255,.86));backdrop-filter:saturate(120%) blur(3px)}
+    .panel{width:88%;max-width:380px;background:#fff;border-radius:18px;box-shadow:0 10px 30px var(--shadow);padding:18px}
+    .panel h2{margin:.2rem 0 0;font-size:1.2rem}
+    .panel p{margin:.4rem 0 .8rem;color:#374151}
+    .panel .row{display:flex;gap:.5rem;justify-content:space-between;align-items:center;margin:.3rem 0}
+    .btn{appearance:none;border:0;border-radius:14px;padding:12px 16px;background:var(--accent);color:#fff;font-weight:700;font-size:1rem;box-shadow:0 8px 20px rgba(255,77,109,.35);cursor:pointer}
+    .btn.secondary{background:#111827;box-shadow:0 8px 20px rgba(17,24,39,.25)}
+    .legend{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.75rem}
+    .legend .card{background:#f9fafb;border-radius:12px;padding:10px}
+    footer{margin:14px 0 18px;color:#4b5563;font-size:.9rem}
+    .floating{position:absolute;bottom:10px;left:10px;display:flex;gap:.5rem}
+    .mini{font-size:.85rem;padding:8px 10px;border-radius:10px}
+    .settings{position:absolute;top:10px;left:10px}
+    .settings .panel{padding:12px}
+    .hide{display:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="6" width="16" height="12" rx="3" fill="#111827"/><rect x="7" y="8.5" width="10" height="7" rx="1.5" fill="#10b981"/><circle cx="8" cy="18.5" r="1.5" fill="#111827"/><circle cx="16" cy="18.5" r="1.5" fill="#111827"/></svg>
+        <h1>Ketty Cross</h1>
+      </div>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <label class="pill" id="scorePill">Score 0 · Coins 0</label>
+        <label class="pill" id="bestPill">Best 0</label>
+        <label class="pill">
+          <select id="langSel">
+            <option value="ar">العربية</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <div id="game">
+      <div class="overlay" id="startOverlay">
+        <div class="panel">
+          <h2 id="startTitle">ابدأ اللعب</h2>
+          <p id="startDesc">أسلوب لعب وإحساس قريب من Crossy Road بفيزياء شبكية، جرافيكس نظيف، وصعوبة تتدرّج، مع <b>نهاية للمستوى</b>.</p>
+          <div class="legend">
+            <div class="card" id="lgd1">🚗 طرق بسيارات</div>
+            <div class="card" id="lgd2">🚆 سكك وقطارات مع إنذار</div>
+            <div class="card" id="lgd3">🌊 أنهار وجذوع حقيقية القوام</div>
+            <div class="card" id="lgd4">🪙 عملات دوّارة</div>
+          </div>
+          <div class="row">
+            <button class="btn" id="startBtn">ابدأ</button>
+            <button class="btn secondary" id="howBtn">الطريقة</button>
+          </div>
+          <p id="startHint" style="font-size:.75rem;margin-top:.6rem;color:#6b7280">الشخصية روبوت طراز Ketty (بدون شعارات). التحكم: نقرة/سحب على الجوال، أسهم/مسافة على الكمبيوتر.</p>
+        </div>
+      </div>
+      <div class="overlay" id="howOverlay" style="display:none">
+        <div class="panel">
+          <h2 id="howTitle">كيف تلعب</h2>
+          <p id="howText">• نقرة/مسافة = للأمام · سحب/أسهم = تحريك. تجنّب السيارات والقطارات. على الأنهار قف على الجذوع. اجمع العملات وواصل حتى خط النهاية.</p>
+          <button class="btn" id="closeHow">تمام</button>
+        </div>
+      </div>
+      <div class="overlay" id="endOverlay" style="display:none">
+        <div class="panel">
+          <h2 id="endTitle">انتهى المستوى!</h2>
+          <p id="endStats">Score 0 · Coins 0</p>
+          <div class="row"><button class="btn" id="againBtn">العب مجددًا</button><button class="btn secondary mini" id="shareBtn">شارك</button></div>
+        </div>
+      </div>
+      <div class="settings hide" id="settings">
+        <div class="panel">
+          <div class="row" style="justify-content:start;gap:.5rem">
+            <label><input type="checkbox" id="shadowsToggle" checked> ظلال</label>
+            <label><input type="checkbox" id="fxToggle" checked> مؤثرات</label>
+          </div>
+          <div class="row" style="justify-content:start;gap:.5rem;margin-top:.5rem">
+            <label>شكل/لون Ketty:
+              <select id="skinSelect">
+                <option value="ketty-yellow">Ketty Yellow</option>
+                <option value="ketty-black">Ketty Black</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="floating"><button class="btn secondary mini" id="pauseBtn">إيقاف مؤقت</button></div>
+    </div>
+
+    <footer id="footerNote">موقع جاهز للنشر. انسخ الرابط لعرضه كـ QR على الروبوت.</footer>
+  </div>
+
+  <!-- نقطة دخول واحدة بنمط ES Modules -->
+  <script type="module" src="./src/main.mjs"></script>
+</body>
+</html>
