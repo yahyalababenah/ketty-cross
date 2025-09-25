@@ -1,4 +1,5 @@
 // src/ui.mjs
+
 export const LANG = {
   ar: {
     startTitle:'ابدأ اللعب', startDesc:'أسلوب لعب وإحساس قريب من Crossy Road بفيزياء شبكية، جرافيكس نظيف، وصعوبة تتدرّج، مع نهاية للمستوى.',
@@ -24,29 +25,46 @@ export const LANG = {
   }
 };
 
+/**
+ * يحدّث نصوص الواجهة حسب اللغة + حالة اللعبة
+ * @param {string} l 'ar' | 'en'
+ * @param {object} dom مرجع عناصر DOM التي مررتها من main.mjs
+ * @param {object} State الحالة العامة (نستعمل win/paused)
+ */
 export function setLang(l, dom, State){
-  const L = LANG[l]; if(!L) return;
-  document.documentElement.dir = l==='ar'?'rtl':'ltr';
+  const L = LANG[l] || LANG.ar;   // ✅ ثبّت المتغير كـ L ونستخدمه لاحقًا
+  document.documentElement.dir  = l==='ar' ? 'rtl' : 'ltr';
   document.documentElement.lang = l;
+
   dom.startTitle.textContent = L.startTitle;
   dom.startDesc.textContent  = L.startDesc;
   dom.lgd1.textContent = L.lgd1;
   dom.lgd2.textContent = L.lgd2;
   dom.lgd3.textContent = L.lgd3;
   dom.lgd4.textContent = L.lgd4;
-  dom.startBtn.textContent = L.start;
-  dom.howBtn.textContent = L.how;
-  dom.closeHow.textContent = L.ok;
-  dom.againBtn.textContent = L.again;
-  dom.shareBtn.textContent = L.share;
-  dom.howTitle.textContent = L.howTitle;
-  dom.howText.textContent  = L.howText;
-  dom.endTitle.textContent = State.win? L.endWin : L.endLose;
+
+  dom.startBtn.textContent   = L.start;
+  dom.howBtn.textContent     = L.how;
+  dom.closeHow.textContent   = L.ok;
+  dom.againBtn.textContent   = L.again;
+  dom.shareBtn.textContent   = L.share;
+
+  dom.howTitle.textContent   = L.howTitle;
+  dom.howText.textContent    = L.howText;
+
+  dom.endTitle.textContent   = State?.win ? L.endWin : L.endLose;
   dom.footerNote.textContent = L.footer;
-  updatePills(L, State, {scorePill:dom.scorePill, bestPill:dom.bestPill});
+
+  if (dom.pauseBtn) dom.pauseBtn.textContent = State?.paused ? L.resume : L.pause;
+
+  // حدّث الحصيلة
+  updatePills(L, State, {scorePill: dom.scorePill, bestPill: dom.bestPill});
 }
 
+/**
+ * يحدّث عدّادات Score/Best/Coins
+ */
 export function updatePills(L, State, {scorePill, bestPill}){
-  scorePill.textContent = `${L.score} ${State.player.score} · ${L.coins} ${State.player.coins}`;
-  bestPill.textContent  = `${L.best} ${State.best}`;
+  if (scorePill) scorePill.textContent = `${L.score} ${State.player.score} · ${L.coins} ${State.player.coins}`;
+  if (bestPill)  bestPill.textContent  = `${L.best} ${State.best}`;
 }
