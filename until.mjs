@@ -1,4 +1,4 @@
-// util.mjs
+// src/util.mjs
 export const TILE = 1, COLS = 9, VROWS = 14, LEVEL_ROWS = 52, START_SAFE = 3, EAGLE_TIMEOUT = 6500;
 
 export const COLORS = {
@@ -12,10 +12,10 @@ export const rightX = (COLS-1)/2*TILE;
 export const colToX = c => leftX + c*TILE;
 export const rowToZ = r => r*TILE;
 
-// انحراف نموذج الروبوت: النموذج يبني مواجها +X، نريد أن يكون الأمام +Z
+// نموذج الروبوت مُنشأ باتجاه +X، ونحن نعتبر الأمام +Z
 export const MODEL_YAW_OFFSET = -Math.PI/2;
 
-// مزج زوايا مع مراعاة التفاف ±π
+// مزج زوايا مع معالجة التفاف ±π
 export function lerpAngle(a, b, t){
   let d = b - a;
   while (d >  Math.PI) d -= Math.PI*2;
@@ -23,7 +23,7 @@ export function lerpAngle(a, b, t){
   return a + d * t;
 }
 
-// اختيار عشوائي + reseed (اختياري)
+// واجهات اختيارية (بعض الملفات قد تناديها)
 export function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 export function rand(a,b){ return a + Math.random()*(b-a); }
-export function reseed(){ /* اختياري: نكتفي بالـ Math.random */ }
+export function reseed(){ /* لا شيء — نستخدم Math.random */ }
