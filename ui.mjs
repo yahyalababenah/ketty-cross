@@ -1,4 +1,4 @@
-// ui.mjs
+// src/ui.mjs
 export const LANG = {
   ar: {
     startTitle:'ابدأ اللعب', startDesc:'أسلوب لعب وإحساس قريب من Crossy Road بفيزياء شبكية، جرافيكس نظيف، وصعوبة تتدرّج، مع نهاية للمستوى.',
@@ -25,32 +25,28 @@ export const LANG = {
 };
 
 export function setLang(l, dom, State){
-  const T = LANG[l] || LANG.ar;
+  const L = LANG[l]; if(!L) return;
   document.documentElement.dir = l==='ar'?'rtl':'ltr';
   document.documentElement.lang = l;
-
-  dom.startTitle.textContent = T.startTitle;
-  dom.startDesc.textContent  = T.startDesc;
-  dom.lgd1.textContent = T.lgd1;
-  dom.lgd2.textContent = T.lgd2;
-  dom.lgd3.textContent = T.lgd3;
-  dom.lgd4.textContent = T.lgd4;
-
-  dom.startBtn.textContent = T.start;
-  dom.howBtn.textContent   = T.how;
-  dom.closeHow.textContent = T.ok;
-  dom.againBtn.textContent = T.again;
-  dom.shareBtn.textContent = T.share;
-  dom.howTitle.textContent = T.howTitle;
-  dom.howText.textContent  = T.howText;
-  dom.endTitle.textContent = State.win? T.endWin : T.endLose;
-  dom.footerNote.textContent = T.footer;
-
-  if (dom.pauseBtn) dom.pauseBtn.textContent = State.paused? T.resume : T.pause;
-  updatePills(T, State, {scorePill:dom.scorePill, bestPill:dom.bestPill});
+  dom.startTitle.textContent = L.startTitle;
+  dom.startDesc.textContent  = L.startDesc;
+  dom.lgd1.textContent = L.lgd1;
+  dom.lgd2.textContent = L.lgd2;
+  dom.lgd3.textContent = L.lgd3;
+  dom.lgd4.textContent = L.lgd4;
+  dom.startBtn.textContent = L.start;
+  dom.howBtn.textContent = L.how;
+  dom.closeHow.textContent = L.ok;
+  dom.againBtn.textContent = L.again;
+  dom.shareBtn.textContent = L.share;
+  dom.howTitle.textContent = L.howTitle;
+  dom.howText.textContent  = L.howText;
+  dom.endTitle.textContent = State.win? L.endWin : L.endLose;
+  dom.footerNote.textContent = L.footer;
+  updatePills(L, State, {scorePill:dom.scorePill, bestPill:dom.bestPill});
 }
 
-export function updatePills(T, State, refs){
-  refs.scorePill.textContent = `${T.score} ${State.player.score} · ${T.coins} ${State.player.coins}`;
-  refs.bestPill.textContent  = `${T.best} ${State.best}`;
+export function updatePills(L, State, {scorePill, bestPill}){
+  scorePill.textContent = `${L.score} ${State.player.score} · ${L.coins} ${State.player.coins}`;
+  bestPill.textContent  = `${L.best} ${State.best}`;
 }
