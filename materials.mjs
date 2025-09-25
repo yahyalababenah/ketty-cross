@@ -1,7 +1,8 @@
+// src/materials.mjs
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { COLS, TILE } from './util.mjs';
+import { COLS, TILE, COLORS } from './util.mjs';
 
-function makeWoodTex(renderer){
+function makeWoodTexStrong(renderer){
   const w=256,h=64; const cvs=document.createElement('canvas'); cvs.width=w; cvs.height=h; const ctx=cvs.getContext('2d');
   const base='#8b5a2b', dark='#6f4522', mid='#7a4d25';
   ctx.fillStyle=base; ctx.fillRect(0,0,w,h);
@@ -23,8 +24,7 @@ function makeWoodTex(renderer){
   }
   const tex=new THREE.CanvasTexture(cvs);
   tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.repeat.set(6,1);
-  tex.magFilter=THREE.LinearFilter; tex.minFilter=THREE.LinearMipmapLinearFilter; tex.generateMipmaps=true;
-  if(renderer.capabilities.getMaxAnisotropy){ tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); }
+  if(renderer.capabilities.getMaxAnisotropy){ tex.anisotropy=renderer.capabilities.getMaxAnisotropy(); }
   return tex;
 }
 function makeBarkTex(renderer){
@@ -37,35 +37,40 @@ function makeBarkTex(renderer){
   }
   const tex=new THREE.CanvasTexture(cvs);
   tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.repeat.set(1,2);
-  tex.magFilter=THREE.LinearFilter; tex.minFilter=THREE.LinearMipmapLinearFilter; tex.generateMipmaps=true;
-  if(renderer.capabilities.getMaxAnisotropy){ tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); }
+  if(renderer.capabilities.getMaxAnisotropy){ tex.anisotropy=renderer.capabilities.getMaxAnisotropy(); }
   return tex;
 }
 
 export function initMaterials(renderer){
-  const WOOD_TEX = makeWoodTex(renderer);
+  // geometries
+  const geoLane = new THREE.BoxGeometry(COLS*TILE, 0.2, TILE);
+  const geoCarS = new THREE.BoxGeometry(TILE*1.2, 0.48, TILE*0.8);
+  const geoCarL = new THREE.BoxGeometry(TILE*2.2, 0.48, TILE*0.8);
+  const geoLog  = new THREE.BoxGeometry(TILE*2.5, 0.42, TILE*0.8);
+  const geoTrain= new THREE.BoxGeometry(TILE*4.2, 0.7,  TILE*0.9);
+  const geoCoin = new THREE.CylinderGeometry(0.33,0.33,0.12,24);
+
+  // textures
+  const WOOD_TEX = makeWoodTexStrong(renderer);
   const BARK_TEX = makeBarkTex(renderer);
 
-  const mats = {
-    matGrass: new THREE.MeshStandardMaterial({color:0xfafafa, roughness:0.95, metalness:0.0}),
-    matRoad:  new THREE.MeshStandardMaterial({color:0x5f6f8f, roughness:0.88, metalness:0.05}),
-    matRail:  new THREE.MeshStandardMaterial({color:0x9aa0b4, roughness:0.7, metalness:0.1}),
-    matRiver: new THREE.MeshPhysicalMaterial({color:0x8fe3ff, roughness:0.18, metalness:0.05, transmission:0.0, clearcoat:0.5, clearcoatRoughness:0.4}),
-    matFinish:new THREE.MeshStandardMaterial({color:0xffd166, roughness:0.6}),
-    matCarA:  new THREE.MeshStandardMaterial({color:0xffd54f, roughness:0.6}),
-    matCarB:  new THREE.MeshStandardMaterial({color:0x9b59b6, roughness:0.6}),
-    matLog:   new THREE.MeshStandardMaterial({map:WOOD_TEX, color:0xffffff, roughness:0.75, metalness:0.08}),
-    matTrain: new THREE.MeshStandardMaterial({color:0x222222, roughness:0.7}),
-    matCoin:  new THREE.MeshStandardMaterial({color:0xffd166, metalness:0.6, roughness:0.3, emissive:0xcfa64a, emissiveIntensity:0.25}),
-    trunkTex: BARK_TEX
+  // lane materials
+  const matGrass = new THREE.MeshStandardMaterial({color:0xfafafa, roughness:0.95, metalness:0.0});
+  const matRoad  = new THREE.MeshStandardMaterial({color:0x5f6f8f, roughness:0.88, metalness:0.05});
+  const matRail  = new THREE.MeshStandardMaterial({color:0x9aa0b4, roughness:0.7,  metalness:0.1});
+  const matRiver = new THREE.MeshPhysicalMaterial({color:0x8fe3ff, roughness:0.18, metalness:0.05, transmission:0.0, clearcoat:0.5, clearcoatRoughness:0.4});
+  const matFinish= new THREE.MeshStandardMaterial({color:0xffd166, roughness:0.6});
+
+  // entities materials
+  const matCarA = new THREE.MeshStandardMaterial({color:0xffd54f, roughness:0.6});
+  const matCarB = new THREE.MeshStandardMaterial({color:0x9b59b6, roughness:0.6});
+  const matLog  = new THREE.MeshStandardMaterial({map:WOOD_TEX, color:0xffffff, roughness:0.75, metalness:0.08});
+  const matTrain= new THREE.MeshStandardMaterial({color:0x222222, roughness:0.7});
+  const matCoin = new THREE.MeshStandardMaterial({color:0xffd166, metalness:0.6, roughness:0.3, emissive:0xcfa64a, emissiveIntensity:0.25});
+
+  return {
+    geos:{ geoLane, geoCarS, geoCarL, geoLog, geoTrain, geoCoin },
+    mats:{ matGrass, matRoad, matRail, matRiver, matFinish, matCarA, matCarB, matLog, matTrain, matCoin, BARK_TEX },
+    COLORS
   };
-  const geos = {
-    geoLane: new THREE.BoxGeometry(COLS*TILE, 0.2, TILE),
-    geoCarS: new THREE.BoxGeometry(TILE*1.2, 0.48, TILE*0.8),
-    geoCarL: new THREE.BoxGeometry(TILE*2.2, 0.48, TILE*0.8),
-    geoLog : new THREE.BoxGeometry(TILE*2.5, 0.42, 0.8),
-    geoTrain:new THREE.BoxGeometry(TILE*4.2, 0.7, 0.9),
-    geoCoin: new THREE.CylinderGeometry(0.33,0.33,0.12,24)
-  };
-  return { mats, geos, textures:{ WOOD_TEX, BARK_TEX } };
 }
