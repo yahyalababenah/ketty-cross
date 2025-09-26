@@ -7,18 +7,19 @@ import {
 } from './util.mjs';
 import { initMaterials } from './materials.mjs';
 import { Sound } from './audio.mjs';
-import { makeRobot } from './robot.mjs';
+import { makeRobot } from './robot.mjs?v=3';
+
 import { LANG, setLang, updatePills } from './ui.mjs';
 import {
   makeLevel, makeLaneMesh, spawnEntities, clearEntities,
   placeCoins, makeCoin
 } from './level.mjs';
 
-/* ================= DOM refs ================= */
-const container    = document.getElementById('game');
-const startOverlay = document.getElementById('startOverlay');
-const endOverlay   = document.getElementById('endOverlay');
-const howOverlay   = document.getElementById('howOverlay');
+/* ============ DOM refs ============ */
+const container   = document.getElementById('game');
+const startOverlay= document.getElementById('startOverlay');
+const endOverlay  = document.getElementById('endOverlay');
+const howOverlay  = document.getElementById('howOverlay');
 
 const startBtn  = document.getElementById('startBtn');
 const howBtn    = document.getElementById('howBtn');
@@ -54,12 +55,17 @@ const dom = {
   scorePill,bestPill,endTitle
 };
 
-/* ================= Three: renderer / scene / camera ================= */
+/* ============ Three: renderer / scene / camera ============ */
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+// تحسين واقعية الألوان والإضاءة:
+renderer.physicallyCorrectLights = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+
 container.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -79,26 +85,35 @@ function makeCamera(){
   camera.lookAt(0,0,camTargetZ);
   renderer.setSize(w,h,false);
 }
+// أخفي طبقة bootHint بعد نجاح تحميل الموديولات
+window.dispatchEvent(new CustomEvent('game:booted'));
+
 window.addEventListener('resize', makeCamera, { passive:true });
 makeCamera();
 
 /* Lights */
-const hemi = new THREE.HemisphereLight(0xffffff, 0xb0d6ff, 0.7);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x243246, 0.7);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+
+const sun = new THREE.DirectionalLight(0xffffff, 0.95);
 sun.position.set(6,12,6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024,1024);
 Object.assign(sun.shadow.camera, { top:20, bottom:-10, left:-15, right:15 });
+// ظلال أنظف:
+sun.shadow.bias = -0.0005;
+sun.shadow.normalBias = 0.02;
+
 scene.add(sun);
 
-/* ================= Materials / assets (geometries + materials) ================= */
-const assets = initMaterials(renderer); // يستخدم THREE كـ ESM
+/* ============ Materials / assets (geometries + materials) ============ */
+const assets = initMaterials(renderer);
 
-/* ================= World + State ================= */
+/* ============ World + State ============ */
 const world = new THREE.Group();
 scene.add(world);
 
+// ملاحظة: نمرّر State بالكامل إلى makeRobot ليقرأ skin/mode/leanDeg
 const State = {
   lanes: [], coins:new Set(),
   player: {
@@ -107,13 +122,18 @@ const State = {
   },
   lastInputAt: performance.now(), over:false, win:false, paused:false,
   best: Number(localStorage.getItem('kc_highscore_3d')||0),
-  shadows: true, fx: true, skin:'ketty-yellow',
+  shadows: true, fx: true,
+  // سكين واقعي افتراضي + خيارات لروبوتك (robot.mjs سيتعامل مع الافتراضات بأمان)
+  skin:'ketty-yellow-oem',
+  mode:'cover',      // أو 'trays'
+  trays:2,
+  leanDeg:7,
   lang: localStorage.getItem('kc_lang') || 'ar'
 };
 
 const SFX = new Sound();
 
-/* ================= Particles ================= */
+/* ============ Particles ============ */
 const particles=[];
 function addBurst(x,z,color=0xffffff,count=12){
   for(let i=0;i<count;i++){
@@ -121,15 +141,13 @@ function addBurst(x,z,color=0xffffff,count=12){
       new THREE.SphereGeometry(0.05,10,10),
       new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:0.4, transparent:true})
     );
-    particles.push({
-      m,x,z,
+    particles.push({m,x,z,
       vx:(Math.random()*1.6-0.8),
       vy:(1+Math.random()*1.2),
       vz:(Math.random()*1.6-0.8),
       life:800, t:0
     });
-    m.position.set(x,0.4,z);
-    scene.add(m);
+    m.position.set(x,0.4,z); scene.add(m);
   }
 }
 function updateParticles(dt){
@@ -142,18 +160,25 @@ function updateParticles(dt){
     p.m.material.opacity = Math.max(0,1 - p.t/p.life);
   }
   for(let i=particles.length-1;i>=0;i--){
-    if(particles[i].t>particles[i].life){
-      scene.remove(particles[i].m);
-      particles.splice(i,1);
-    }
+    if(particles[i].t>particles[i].life){ scene.remove(particles[i].m); particles.splice(i,1); }
   }
 }
 
-/* ================= Build Scene ================= */
+/* ============ Helpers ============ */
+// فعل/ألغِ الظلال بشكل متعمّق على كل العناصر
+function setShadowRecursive(obj, enabled){
+  obj.traverse((n)=>{
+    if(n.isMesh){
+      n.castShadow = enabled;
+      n.receiveShadow = enabled || n.receiveShadow; // لا نعطّل الاستقبال إن كان مفعّلًا
+    }
+  });
+}
+
+/* ============ Scene building ============ */
 const laneMeshes=[]; let robot; const coinMeshes=new Map();
 
 function buildScene(){
-  // lanes
   laneMeshes.forEach(m=>world.remove(m)); laneMeshes.length=0;
   clearEntities(State.lanes, world);
   if(robot) world.remove(robot);
@@ -161,10 +186,8 @@ function buildScene(){
   for(let r=0;r<State.lanes.length;r++){
     const data = State.lanes[r];
     const mesh = makeLaneMesh(data.type, assets);
-    mesh.position.set(0,-0.1,rowToZ(r));
-    mesh.receiveShadow = true;
+    mesh.position.set(0,-0.1,rowToZ(r)); mesh.receiveShadow=true;
     world.add(mesh); laneMeshes.push(mesh);
-
     if(data.type===LANE.ROAD||data.type===LANE.RIVER||data.type===LANE.RAIL){
       spawnEntities(data, assets, world);
     }
@@ -173,64 +196,45 @@ function buildScene(){
     }
   }
 
-  // coins
   coinMeshes.forEach(m=>world.remove(m)); coinMeshes.clear();
   State.coins.forEach(key=>{
     const [r,c]=key.split(':').map(Number);
-    const m = makeCoin(assets);
+    const m=makeCoin(assets);
     m.position.set(colToX(c),0.4,rowToZ(r));
-    world.add(m);
-    coinMeshes.set(key,m);
+    world.add(m); coinMeshes.set(key,m);
   });
 
-  // robot
   robot = makeRobot(State);
   robot.position.set(colToX(State.player.col),0.1,rowToZ(State.player.row));
   robot.rotation.y = State.player.yaw;
   world.add(robot);
 
-  // shadows toggle
   renderer.shadowMap.enabled = State.shadows;
-  [robot,...world.children].forEach(n=>{ if(n.isMesh) n.castShadow=State.shadows; });
+  // بدلاً من فحص المستوى الأول فقط، نفحص كامل الشجرة:
+  setShadowRecursive(world, State.shadows);
 }
 
-/* ================= Update / Render ================= */
+/* ============ Update & render loop ============ */
 function update(dt){
   if(State.paused||State.over) return;
 
-  // camera follow
+  // كاميرا تتبع
   const targetZ = Math.max(0, Math.min(State.lanes.length - VROWS, State.player.row - 6));
-  camTargetZ += (targetZ - camTargetZ) * 0.08;
-  camLag += (targetZ - camLag) * 0.045;
-  camera.position.z = -6 + camTargetZ;
-  camera.lookAt(0,0, camLag+6);
+  camTargetZ += (targetZ - camTargetZ) * 0.08; camLag += (targetZ - camLag) * 0.045;
+  camera.position.z = -6 + camTargetZ; camera.lookAt(0,0, camLag+6);
 
-  // moving entities
+  // تحريك الكيانات داخل المسارات
   for(let r=0;r<State.lanes.length;r++){
     const lane = State.lanes[r]; if(!lane.ents) continue;
-
     if(lane.type===LANE.ROAD || lane.type===LANE.RIVER){
-      const speed = lane.speed * TILE;
-      const dir = Math.sign(lane.speed);
-      const minX = leftX - 6, maxX = rightX + 6;
-      const spacing = lane.spacing || 3;
-
+      const speed = lane.speed * TILE; const dir = Math.sign(lane.speed);
+      const minX = leftX - 6, maxX = rightX + 6; const spacing = lane.spacing || 3;
+      for(const m of lane.ents){ m.position.x += speed*dt/1000; m.position.z = rowToZ(r); }
       for(const m of lane.ents){
-        m.position.x += speed*dt/1000;
-        m.position.z = rowToZ(r);
-      }
-      for(const m of lane.ents){
-        if(dir>0 && m.position.x > maxX){
-          let min = Infinity; for(const e of lane.ents) min = Math.min(min, e.position.x);
-          m.position.x = min - spacing;
-        }
-        if(dir<0 && m.position.x < minX){
-          let max = -Infinity; for(const e of lane.ents) max = Math.max(max, e.position.x);
-          m.position.x = max + spacing;
-        }
+        if(dir>0 && m.position.x > maxX){ let min = Infinity; for(const e of lane.ents) min = Math.min(min, e.position.x); m.position.x = min - spacing; }
+        if(dir<0 && m.position.x < minX){ let max = -Infinity; for(const e of lane.ents) max = Math.max(max, e.position.x); m.position.x = max + spacing; }
       }
     }
-
     if(lane.type===LANE.RAIL){
       if(lane.signal){
         const lamp = lane.signal.userData.lamp;
@@ -256,39 +260,37 @@ function update(dt){
     }
   }
 
-  // eagle timeout
+  // مهلة النسر
   if(performance.now()-State.lastInputAt > EAGLE_TIMEOUT){
     gameOver(false, State.lang==='ar'? 'خطفك النسر!' : 'Caught by the eagle!');
   }
 
-  // river logic (logs)
+  // النهر (السقوط/ركوب الجذوع)
   const pr = State.player.row; const lane = State.lanes[pr];
   if(lane && lane.type===LANE.RIVER){
     let onLog=false; let logSpeed=0;
     for(const m of lane.ents){
-      if(Math.abs(robot.position.x - m.position.x) < (m.scale.x*1.2)
-         && Math.abs(robot.position.z - m.position.z) < 0.45){
-        onLog=true; logSpeed = lane.speed; break;
-      }
+      if(Math.abs(robot.position.x - m.position.x) < (m.scale.x*1.2) &&
+         Math.abs(robot.position.z - m.position.z) < 0.45){ onLog=true; logSpeed = lane.speed; break; }
     }
     if(onLog){
       robot.position.x += logSpeed*dt/1000;
       State.player.col = Math.round((robot.position.x - leftX)/TILE);
     }else{
       if(State.fx) addBurst(robot.position.x, robot.position.z, 0x66ccff, 14);
-      SFX.splash();
-      gameOver(false, State.lang==='ar'? 'سقطت في الماء':'Fell in water');
+      SFX.splash(); gameOver(false, State.lang==='ar'? 'سقطت في الماء':'Fell in water');
     }
   }
 
-  // clamp X
+  // حدود العرض
   robot.position.x = Math.max(leftX, Math.min(rightX, robot.position.x));
 
-  // collisions
+  // تصادمات سيارات/قطارات
   if(lane){
     if(lane.type===LANE.ROAD){
       for(const m of lane.ents){
-        if(Math.abs(robot.position.x - m.position.x) < 0.6 && Math.abs(robot.position.z - m.position.z) < 0.45){
+        if(Math.abs(robot.position.x - m.position.x) < 0.6 &&
+           Math.abs(robot.position.z - m.position.z) < 0.45){
           if(State.fx) addBurst(robot.position.x, robot.position.z, 0xff6b6b, 18);
           SFX.crash(); gameOver(false, State.lang==='ar'? 'اصطدام سيارة':'Car crash'); break;
         }
@@ -296,7 +298,8 @@ function update(dt){
     }
     if(lane.type===LANE.RAIL){
       for(const m of lane.ents){
-        if(Math.abs(robot.position.x - m.position.x) < 1.6 && Math.abs(robot.position.z - m.position.z) < 0.6){
+        if(Math.abs(robot.position.x - m.position.x) < 1.6 &&
+           Math.abs(robot.position.z - m.position.z) < 0.6){
           if(State.fx) addBurst(robot.position.x, robot.position.z, 0xcccccc, 20);
           SFX.crash(); gameOver(false, State.lang==='ar'? 'دهسك القطار':'Hit by train'); break;
         }
@@ -304,25 +307,25 @@ function update(dt){
     }
   }
 
-  // finish
+  // الفوز
   if(State.player.row >= State.lanes.length-1){
     State.player.row = State.lanes.length-1;
     SFX.win(); gameOver(true);
   }
 
-  // smooth facing
+  // دوران الروبوت نحو الاتجاه المطلوب
   const smooth = 1 - Math.pow(0.001, dt);
   State.player.yaw = lerpAngle(State.player.yaw, State.player.targetYaw, smooth);
   if (robot) robot.rotation.y = State.player.yaw;
 
-  // coins spin + particles
+  // عملات + مؤثرات
   coinMeshes.forEach((m)=>{ m.rotation.z += dt/900; });
   updateParticles(dt);
 }
 
 function render(){ renderer.render(scene, camera); }
 
-/* ================= Input / Movement ================= */
+/* ============ Input ============ */
 function tryMove(dc,dr){
   if(State.over||State.paused) return;
   const p = State.player;
@@ -330,19 +333,18 @@ function tryMove(dc,dr){
   const targetRow = Math.max(0, Math.min(State.lanes.length-1, p.row+dr));
   if(targetCol===p.col && targetRow===p.row) return;
 
-  p.col = targetCol; p.row = targetRow;
-  State.lastInputAt = performance.now();
+  p.col = targetCol; p.row = targetRow; State.lastInputAt = performance.now();
   robot.position.set(colToX(p.col), robot.position.y, rowToZ(p.row));
   SFX.move();
 
-  // وجهة الدوران نسبة لمحور +Z
+  // تحديد اتجاه الوجه
   let aim;
   if (Math.abs(dr) >= Math.abs(dc)) aim = (dr > 0) ? 0 : Math.PI;
   else aim = (dc > 0) ?  Math.PI/2 : -Math.PI/2;
   State.player.targetYaw = MODEL_YAW_OFFSET + aim;
 
+  // سكورات + عملات
   if(p.row > p.maxRow){ p.maxRow=p.row; p.score += 1; }
-
   const key = `${p.row}:${p.col}`;
   if(State.coins.has(key)){
     State.coins.delete(key);
@@ -350,11 +352,9 @@ function tryMove(dc,dr){
     if(m){ world.remove(m); coinMeshes.delete(key); }
     p.coins++; p.score+=5; SFX.coin();
   }
-
   updatePills(LANG[State.lang], State, {scorePill, bestPill});
 }
 
-// keyboard
 window.addEventListener('keydown', e=>{
   if(['ArrowUp','Space'].includes(e.code)){ tryMove(0,+1); e.preventDefault(); }
   if(e.code==='ArrowLeft'){ tryMove(-1,0); e.preventDefault(); }
@@ -362,15 +362,12 @@ window.addEventListener('keydown', e=>{
   if(e.code==='ArrowDown'){ tryMove(0,-1); e.preventDefault(); }
   if(e.code==='KeyP'){ togglePause(); }
   if(e.code==='KeyO'){ settings.classList.toggle('hide'); }
-});
+}, { passive:false });
 
-// desktop click-to-advance
 container.addEventListener('click', e=>{
   if(e.target.closest('.overlay') || e.target.closest('button')) return;
   tryMove(0,+1);
 });
-
-// touch
 let touchStart=null;
 container.addEventListener('touchstart', e=>{
   touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY,t:performance.now()};
@@ -384,12 +381,10 @@ container.addEventListener('touchend', e=>{
   else if(absX>absY){ tryMove(dx>0? +1 : -1, 0); }
   else { tryMove(0, dy>0? -1 : +1); }
   touchStart=null;
-});
+}, {passive:true});
 
-/* ================= Game loop / control ================= */
-const STEP = 1000/60;
-let acc=0, lastRAF=performance.now(), started=false;
-
+/* ============ Loop / start / game over ============ */
+const STEP = 1000/60; let acc=0, lastRAF=performance.now(); let started=false;
 function tick(ts){
   let dt = ts - lastRAF; lastRAF = ts;
   if (dt > 250) dt = 250;
@@ -403,15 +398,13 @@ function startGame(){
   if (!started) { started = true; requestAnimationFrame(tick); }
   startOverlay.style.display='none';
   reset();
-  SFX.move(); // نبضة أولى
+  SFX.move(); // نبضة بداية
 }
 
 function gameOver(win=false, reason=''){
-  if(State.over) return;
-  State.over=true; State.win=win;
+  if(State.over) return; State.over=true; State.win=win;
   if(State.player.score>State.best){
-    State.best=State.player.score;
-    localStorage.setItem('kc_highscore_3d', String(State.best));
+    State.best=State.player.score; localStorage.setItem('kc_highscore_3d', String(State.best));
   }
   endTitle.textContent = win? LANG[State.lang].endWin : LANG[State.lang].endLose;
   endStats.textContent = `${reason? reason+' · ' : ''}${LANG[State.lang].score} ${State.player.score} · ${LANG[State.lang].coins} ${State.player.coins} · ${LANG[State.lang].best} ${State.best}`;
@@ -425,13 +418,14 @@ function togglePause(){
   pauseBtn.textContent = State.paused? LANG[State.lang].resume : LANG[State.lang].pause;
 }
 
-/* ================= UI wiring ================= */
+/* ============ UI wiring ============ */
 startBtn.addEventListener('click', startGame);
 startOverlay.addEventListener('click', (e)=>{ if(e.target.closest('button')) return; startGame(); });
 againBtn.addEventListener('click', ()=>{ endOverlay.style.display='none'; reset(); });
 howBtn.addEventListener('click', ()=> howOverlay.style.display='grid');
 closeHow.addEventListener('click', ()=> howOverlay.style.display='none');
 pauseBtn.addEventListener('click', togglePause);
+
 shareBtn.addEventListener('click', async()=>{
   const url=location.href;
   if(navigator.share){
@@ -444,9 +438,10 @@ shareBtn.addEventListener('click', async()=>{
     }catch{ alert(url); }
   }
 });
+
 shadowsToggle.addEventListener('change', e=>{
-  State.shadows=e.target.checked;
-  renderer.shadowMap.enabled = State.shadows;
+  State.shadows=e.target.checked; renderer.shadowMap.enabled = State.shadows;
+  setShadowRecursive(world, State.shadows);
 });
 fxToggle.addEventListener('change', e=>{ State.fx=e.target.checked; });
 
@@ -459,18 +454,17 @@ if(skinSelect){
     robot.position.set(colToX(State.player.col),0.1,rowToZ(State.player.row));
     robot.rotation.y = State.player.yaw;
     world.add(robot);
-    [robot,...world.children].forEach(n=>{ if(n.isMesh) n.castShadow=State.shadows; });
+    setShadowRecursive(world, State.shadows);
   });
 }
 
 langSel.value = State.lang;
 langSel.addEventListener('change', e=>{
-  State.lang=e.target.value;
-  localStorage.setItem('kc_lang', State.lang);
+  State.lang=e.target.value; localStorage.setItem('kc_lang', State.lang);
   setLang(State.lang, dom, State);
 });
 
-/* ================= Reset / Init ================= */
+/* ============ Reset ============ */
 function reset(){
   clearEntities(State.lanes, world);
   coinMeshes.forEach(m=>{ if(m) world.remove(m); }); coinMeshes.clear();
@@ -490,6 +484,6 @@ function reset(){
   updatePills(LANG[State.lang], State, {scorePill, bestPill});
 }
 
-// i18n init
+/* ============ Init ============ */
 setLang(State.lang, dom, State);
 updatePills(LANG[State.lang], State, {scorePill, bestPill});
