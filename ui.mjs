@@ -1,9 +1,11 @@
-// src/ui.mjs
+// ui.mjs — الترجمة (i18n) وتحديث الواجهة
 
 export const LANG = {
   ar: {
-    startTitle:'ابدأ اللعب', startDesc:'أسلوب لعب وإحساس قريب من Crossy Road بفيزياء شبكية، جرافيكس نظيف، وصعوبة تتدرّج، مع نهاية للمستوى.',
-    lgd1:'🚗 طرق بسيارات', lgd2:'🚆 سكك وقطارات مع إنذار', lgd3:'🌊 أنهار وجذوع حقيقية القوام', lgd4:'🪙 عملات دوّارة',
+    startTitle:'ابدأ اللعب',
+    startDesc:'أسلوب لعب وإحساس قريب من Crossy Road بفيزياء شبكية، جرافيكس نظيف، وصعوبة تتدرّج، مع نهاية للمستوى.',
+    lgd1:'🚗 طرق بسيارات', lgd2:'🚆 سكك وقطارات مع إنذار',
+    lgd3:'🌊 أنهار وجذوع حقيقية القوام', lgd4:'🪙 عملات دوّارة',
     start:'ابدأ', how:'الطريقة', ok:'تمام', again:'العب مجددًا',
     pause:'إيقاف مؤقت', resume:'استئناف', share:'شارك',
     endWin:'انتهى المستوى!', endLose:'انتهت اللعبة',
@@ -13,8 +15,10 @@ export const LANG = {
     footer:'موقع جاهز للنشر. انسخ الرابط لعرضه كـ QR على الروبوت.'
   },
   en: {
-    startTitle:'Start Playing', startDesc:'Crossy Road–style grid movement, clean graphics, gradual difficulty, and a proper finish line.',
-    lgd1:'🚗 Car lanes', lgd2:'🚆 Rails & trains with warning', lgd3:'🌊 Rivers with rideable logs', lgd4:'🪙 Rotating coins',
+    startTitle:'Start Playing',
+    startDesc:'Crossy Road–style grid movement, clean graphics, gradual difficulty, and a proper finish line.',
+    lgd1:'🚗 Car lanes', lgd2:'🚆 Rails & trains with warning',
+    lgd3:'🌊 Rivers with rideable logs', lgd4:'🪙 Rotating coins',
     start:'Start', how:'How to Play', ok:'OK', again:'Play Again',
     pause:'Pause', resume:'Resume', share:'Share',
     endWin:'Level Complete!', endLose:'Game Over',
@@ -25,46 +29,34 @@ export const LANG = {
   }
 };
 
-/**
- * يحدّث نصوص الواجهة حسب اللغة + حالة اللعبة
- * @param {string} l 'ar' | 'en'
- * @param {object} dom مرجع عناصر DOM التي مررتها من main.mjs
- * @param {object} State الحالة العامة (نستعمل win/paused)
- */
-export function setLang(l, dom, State){
-  const L = LANG[l] || LANG.ar;   // ✅ ثبّت المتغير كـ L ونستخدمه لاحقًا
-  document.documentElement.dir  = l==='ar' ? 'rtl' : 'ltr';
-  document.documentElement.lang = l;
+// ضبط اللغة وتطبيق النصوص
+export function setLang(lang, dom, State){
+  localStorage.setItem('kc_lang', lang);
+  document.documentElement.dir = lang==='ar' ? 'rtl' : 'ltr';
+  document.documentElement.lang = lang;
 
+  const L = LANG[lang];
   dom.startTitle.textContent = L.startTitle;
   dom.startDesc.textContent  = L.startDesc;
   dom.lgd1.textContent = L.lgd1;
   dom.lgd2.textContent = L.lgd2;
   dom.lgd3.textContent = L.lgd3;
   dom.lgd4.textContent = L.lgd4;
-
-  dom.startBtn.textContent   = L.start;
-  dom.howBtn.textContent     = L.how;
-  dom.closeHow.textContent   = L.ok;
-  dom.againBtn.textContent   = L.again;
-  dom.shareBtn.textContent   = L.share;
-
-  dom.howTitle.textContent   = L.howTitle;
-  dom.howText.textContent    = L.howText;
-
-  dom.endTitle.textContent   = State?.win ? L.endWin : L.endLose;
-  dom.footerNote.textContent = L.footer;
-
-  if (dom.pauseBtn) dom.pauseBtn.textContent = State?.paused ? L.resume : L.pause;
-
-  // حدّث الحصيلة
-  updatePills(L, State, {scorePill: dom.scorePill, bestPill: dom.bestPill});
+  dom.startBtn.textContent  = L.start;
+  dom.howBtn.textContent    = L.how;
+  dom.closeHow.textContent  = L.ok;
+  dom.againBtn.textContent  = L.again;
+  dom.pauseBtn.textContent  = State.paused ? L.resume : L.pause;
+  dom.shareBtn.textContent  = L.share;
+  dom.howTitle.textContent  = L.howTitle;
+  dom.howText.textContent   = L.howText;
+  dom.endTitle.textContent  = State.win ? L.endWin : L.endLose;
+  dom.footerNote.textContent= L.footer;
+  updatePills(L, State, {scorePill:dom.scorePill, bestPill:dom.bestPill});
 }
 
-/**
- * يحدّث عدّادات Score/Best/Coins
- */
+// تحديث عدادات Score / Coins / Best
 export function updatePills(L, State, {scorePill, bestPill}){
-  if (scorePill) scorePill.textContent = `${L.score} ${State.player.score} · ${L.coins} ${State.player.coins}`;
-  if (bestPill)  bestPill.textContent  = `${L.best} ${State.best}`;
+  scorePill.textContent = `${L.score} ${State.player.score} · ${L.coins} ${State.player.coins}`;
+  bestPill.textContent  = `${L.best} ${State.best}`;
 }
