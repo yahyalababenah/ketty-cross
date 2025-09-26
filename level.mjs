@@ -1,111 +1,93 @@
-// src/level.mjs
+// level.mjs — إنشاء المستوى والمسارات (lanes)
+
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { TILE, COLS, LANE, leftX, rightX, rowToZ, colToX, rand, pick } from './util.mjs';
+import { LANE, leftX, rightX, rowToZ, pick, rand } from './util.mjs';
 
-// إشارة القطار (عمود + لمبة تحذير)
-function makeSignal(){
-  const g = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1,10), new THREE.MeshStandardMaterial({color:0x666666}));
-  pole.position.y=0.5; g.add(pole);
-
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.08,10,10), new THREE.MeshStandardMaterial({color:0xaa0000, emissive:0x220000, emissiveIntensity:0.2}));
-  lamp.position.set(0.18,1.05,0); g.add(lamp);
-  g.userData.lamp = lamp;
-  return g;
-}
-
-// سيارة
-export function makeCar(assets,long=false){
-  const {geos:{geoCarS,geoCarL}, mats:{matCarA,matCarB}} = assets;
-  const car = new THREE.Mesh(long? geoCarL : geoCarS, (Math.random()<0.5? matCarA:matCarB));
-  car.castShadow=true; car.userData.kind='car';
-
-  const wheelGeo = new THREE.CylinderGeometry(0.18,0.18,0.14);
-  const wheelMat = new THREE.MeshStandardMaterial({color:0x222222, metalness:0.2, roughness:0.6});
-  for(const ox of [-0.4,0.4]){
-    for(const oz of [-0.28,0.28]){
-      const w=new THREE.Mesh(wheelGeo,wheelMat);
-      w.rotation.z=Math.PI/2;
-      w.position.set(ox,0.10,oz);
-      car.add(w);
-    }
+export function makeLevel(START_SAFE, LEVEL_ROWS){
+  const lanes=[]; let hazardStreak=0; let last=LANE.GRASS;
+  for(let r=0;r<START_SAFE;r++) lanes.push({type:LANE.GRASS});
+  for(let r=START_SAFE;r<LEVEL_ROWS;r++){
+    let options=[LANE.ROAD,LANE.RIVER,LANE.RAIL,LANE.GRASS,LANE.GRASS];
+    if(hazardStreak>=2) options=[LANE.GRASS];
+    let type; do{ type=pick(options); } while(type===last && Math.random()<0.45);
+    if(type===LANE.GRASS){ lanes.push({type}); hazardStreak=0; last=type; continue; }
+    hazardStreak++; last=type;
+    const dir = Math.random()<0.5? -1:1; const t = (r-START_SAFE)/(LEVEL_ROWS-START_SAFE);
+    if(type===LANE.ROAD) lanes.push({type,dir,speed:(1.3+t*1.6)*dir,gap:2.0,ents:[],spacing:0});
+    if(type===LANE.RIVER)lanes.push({type,dir,speed:(1.0+t*1.4)*dir,gap:1.6,ents:[],spacing:0});
+    if(type===LANE.RAIL) lanes.push({type,dir,speed:(4.2+t*2.4)*dir,cooldown:1800,next:rand(900,1600),ents:[],signal:null});
   }
-
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(long?1.0:0.8,0.18,0.5), new THREE.MeshStandardMaterial({color:0xeeeeff, roughness:0.1, transparent:true, opacity:0.6}));
-  glass.position.set(0,0.22,0); car.add(glass);
-
-  return car;
-}
-
-// كائنات أخرى
-export const makeLog   = assets => { const m=new THREE.Mesh(assets.geos.geoLog, assets.mats.matLog); m.castShadow=true; m.userData.kind='log'; return m; };
-export const makeTrain = assets => { const m=new THREE.Mesh(assets.geos.geoTrain, assets.mats.matTrain); m.castShadow=true; m.userData.kind='train'; return m; };
-export const makeCoin  = assets => { const m=new THREE.Mesh(assets.geos.geoCoin, assets.mats.matCoin); m.rotation.x=Math.PI/2; m.castShadow=true; m.userData.kind='coin'; return m; };
-
-// Lane أساسي
-function laneMaterial(type, mats){
-  return type===LANE.ROAD? mats.matRoad :
-         type===LANE.RIVER? mats.matRiver :
-         type===LANE.RAIL? mats.matRail :
-         type===LANE.FINISH? mats.matFinish : mats.matGrass;
-}
-
-export function makeLaneMesh(type, assets){
-  const mat = laneMaterial(type, assets.mats);
-  const m   = new THREE.Mesh(assets.geos.geoLane, mat);
-  m.receiveShadow=true;
-  return m;
-}
-
-// إنشاء المستوى (بسيط: سطر safe + وسط + finish)
-export function makeLevel(startSafe, rows){
-  const lanes=[];
-  for(let r=0;r<rows;r++){
-    let type;
-    if(r<startSafe) type=LANE.GRASS;
-    else if(r===rows-1) type=LANE.FINISH;
-    else{
-      const dice=Math.random();
-      if(dice<0.25) type=LANE.ROAD;
-      else if(dice<0.5) type=LANE.RIVER;
-      else if(dice<0.6) type=LANE.RAIL;
-      else type=LANE.GRASS;
-    }
-    lanes.push({type, ents:[], coins:[], row:r});
-  }
+  lanes.push({type:LANE.FINISH});
   return lanes;
 }
 
-// توليد محتوى الكائنات في lane
+// بناء مسار lane
+export function makeLaneMesh(type, assets){
+  const lane = new THREE.Mesh(assets.geos.geoLane, laneMaterial(type, assets));
+  lane.receiveShadow = true;
+  return lane;
+}
+function laneMaterial(type, assets){
+  return type===LANE.ROAD? assets.mats.matRoad
+       :type===LANE.RIVER? assets.mats.matRiver
+       :type===LANE.RAIL? assets.mats.matRail
+       :type===LANE.FINISH? assets.mats.matFinish
+       :assets.mats.matGrass;
+}
+
+// إنشاء الكائنات (سيارات / logs / قطارات)
 export function spawnEntities(lane, assets, world){
+  const spanMin = leftX - 6, spanMax = rightX + 6;
   if(lane.type===LANE.ROAD){
-    for(let i=0;i<3;i++){ const c=makeCar(assets, Math.random()<0.5); c.position.set(rand(leftX,rightX),0.25,rowToZ(lane.row)); world.add(c); lane.ents.push(c); }
-  }
-  if(lane.type===LANE.RIVER){
-    for(let i=0;i<2;i++){ const log=makeLog(assets); log.position.set(rand(leftX,rightX),0.2,rowToZ(lane.row)); world.add(log); lane.ents.push(log); }
-  }
-  if(lane.type===LANE.RAIL){
-    lane.signal=makeSignal(); lane.signal.position.set(-COLS/2,0,rowToZ(lane.row)); world.add(lane.signal);
-    lane.ents=[];
-  }
-}
-
-// حذف الكائنات
-export function clearEntities(lanes, world){
-  for(const lane of lanes){
-    if(lane.ents){ for(const m of lane.ents){ world.remove(m); } }
-    if(lane.signal){ world.remove(lane.signal); }
-  }
-}
-
-// توزيع العملات
-export function placeCoins(lanes){
-  const set=new Set();
-  for(const lane of lanes){
-    if(lane.type===LANE.GRASS && Math.random()<0.3){
-      const col=Math.floor(Math.random()*COLS);
-      set.add(`${lane.row}:${col}`);
+    lane.ents.length=0;
+    for(let i=0;i<4;i++){
+      const m = new THREE.Mesh(Math.random()<0.5?assets.geos.geoCarS:assets.geos.geoCarL,
+                               Math.random()<0.5?assets.mats.matCarA:assets.mats.matCarB);
+      m.castShadow=true; m.userData.kind='car';
+      m.position.set(spanMin+i*4,0.35,0); world.add(m); lane.ents.push(m);
     }
   }
-  return set;
+  if(lane.type===LANE.RIVER){
+    lane.ents.length=0;
+    for(let i=0;i<5;i++){
+      const m=new THREE.Mesh(assets.geos.geoLog, assets.mats.matLog);
+      m.castShadow=true; m.userData.kind='log';
+      m.position.set(spanMin+i*3,0.14,0); world.add(m); lane.ents.push(m);
+    }
+  }
+  if(lane.type===LANE.RAIL && !lane.signal){
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1,10),
+                              new THREE.MeshStandardMaterial({color:0x666666}));
+    pole.position.y=0.5;
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.08,10,10),
+                              new THREE.MeshStandardMaterial({color:0xaa0000,emissive:0x220000,emissiveIntensity:0.2}));
+    lamp.position.set(0.18,1.05,0);
+    const g=new THREE.Group(); g.add(pole); g.add(lamp);
+    g.userData.lamp=lamp;
+    lane.signal=g; world.add(g);
+  }
+}
+
+// مسح الكائنات
+export function clearEntities(lanes, world){
+  lanes.forEach(l=>{
+    if(l.ents){ l.ents.forEach(e=>world.remove(e)); l.ents.length=0; }
+    if(l.signal){ world.remove(l.signal); l.signal=null; }
+  });
+}
+
+// عملات
+export function placeCoins(lanes){
+  const s=new Set();
+  for(let r=1;r<lanes.length-1;r++){
+    if(Math.random()<0.22 && (lanes[r].type===LANE.GRASS||lanes[r].type===LANE.ROAD)){
+      s.add(`${r}:${Math.floor(rand(0,9))}`);
+    }
+  }
+  return s;
+}
+export function makeCoin(assets){
+  const m=new THREE.Mesh(assets.geos.geoCoin, assets.mats.matCoin);
+  m.rotation.x=Math.PI/2; m.castShadow=true; m.userData.kind='coin';
+  return m;
 }
